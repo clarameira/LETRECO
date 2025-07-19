@@ -19,6 +19,7 @@ class _TelaBrancaState extends State<TelaBranca> {
 
   @override
   Widget build(BuildContext context) {
+    
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
