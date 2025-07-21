@@ -79,35 +79,38 @@ class _TelaBrancaState extends State<TelaBranca> {
 
           const SizedBox(height: 200),
           Center(
-            child :Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              alignment: WrapAlignment.center,
-              children: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((letra) {
-                return SizedBox(
-                  height: 45,
-                  width: 45,
-                  child: ElevatedButton(
+           child: Wrap(
+             spacing: 10,
+             runSpacing: 10,
+             alignment: WrapAlignment.center,
+             children: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((letra) {
+               return SizedBox(
+                 height: 45,
+                 width: 45,
+                 child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(5),
-                        ), 
-                    ),
-                    onPressed: () => adicionarLetra(letra),
-                    child: Text(
-                      letra,
-                      style: const TextStyle(
-                      
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    ),
-                    )
-                );
-              }).toList(),
+            alignment: Alignment.center, // já centraliza o conteúdo
+            backgroundColor: const Color.fromARGB(255, 176, 175, 175),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(5),
             ),
-          ),            
+            padding: EdgeInsets.zero, // remove espaços extras
+          ),
+                   onPressed: () => adicionarLetra(letra),
+                   child: Text(
+                     letra,
+                    style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                       color: Colors.white,
+                      ),
+                   ),
+                 ),
+               );
+             }).toList(),
+           ),
+          ),
+            
         ],
       ),  
       
