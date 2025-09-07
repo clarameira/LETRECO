@@ -110,10 +110,91 @@ class _TelaBrancaState extends State<TelaBranca> {
   @override
   void initState() {
     super.initState();
-    _inicializarJogo();
+    _carregarJogo();
   }
 
-  Future<void> _inicializarJogo() async {
+  Future<void> _carregarJogo() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hoje = DateTime.now();
+    final dataHoje = DateTime(hoje.year, hoje.month, hoje.day).toString();
+    
+    // Verificar se é um novo dia
+    final ultimaData = prefs.getString('ultimaDataJogo');
+    
+    if (ultimaData != dataHoje) {
+      // NOVO DIA - iniciar jogo novo
+      await _inicializarNovoJogo();
+      await prefs.setString('ultimaDataJogo', dataHoje);
+      await prefs.remove('jogoFinalizado');
+      await prefs.remove('vitoria');
+      await prefs.remove('tentativaAtual');
+      await prefs.remove('posicaoSelecionada');
+      await prefs.remove('tentativas');
+      await prefs.remove('estados');
+      await prefs.remove('tecladoKeys');
+      await prefs.remove('tecladoValues');
+    } else {
+      // MESMO DIA - carregar estado salvo
+      await _carregarEstadoSalvo();
+    }
+  }
+
+  Future<void> _inicializarNovoJogo() async {
+    final agora = DateTime.now();
+    final diasNoAno = agora.difference(DateTime(agora.year, 1, 1)).inDays;
+    final indiceODS = diasNoAno % todosODS.length;
+    final palavrasODS = todosODS[indiceODS]['palavras'];
+    final indicePalavra = agora.day % palavrasODS.length;
+
+    setState(() {
+      odsAtual = todosODS[indiceODS];
+      palavraAtual = palavrasODS[indicePalavra];
+      jogoFinalizado = false;
+      vitoria = false;
+      tentativaAtual = 0;
+      posicaoSelecionada = 0;
+      tentativas = List.generate(5, (_) => List.filled(5, ''));
+      estados = List.generate(5, (_) => List.filled(5, 0));
+      estadoLetrasTeclado = {};
+    });
+  }
+
+  Future<void> _carregarEstadoSalvo() async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    setState(() {
+      jogoFinalizado = prefs.getBool('jogoFinalizado') ?? false;
+      vitoria = prefs.getBool('vitoria') ?? false;
+      tentativaAtual = prefs.getInt('tentativaAtual') ?? 0;
+      posicaoSelecionada = prefs.getInt('posicaoSelecionada') ?? 0;
+    });
+
+    // Carregar tentativas
+    final tentativasSalvas = prefs.getStringList('tentativas');
+    if (tentativasSalvas != null) {
+      for (int i = 0; i < tentativasSalvas.length; i++) {
+        tentativas[i] = tentativasSalvas[i].split(',');
+      }
+    }
+
+    // Carregar estados
+    final estadosSalvos = prefs.getStringList('estados');
+    if (estadosSalvos != null) {
+      for (int i = 0; i < estadosSalvos.length; i++) {
+        estados[i] = estadosSalvos[i].split(',').map((e) => int.tryParse(e) ?? 0).toList();
+      }
+    }
+
+    // Carregar teclado
+    final tecladoKeys = prefs.getStringList('tecladoKeys');
+    final tecladoValues = prefs.getStringList('tecladoValues');
+    if (tecladoKeys != null && tecladoValues != null) {
+      for (int i = 0; i < tecladoKeys.length; i++) {
+        estadoLetrasTeclado[tecladoKeys[i]] = int.tryParse(tecladoValues[i]) ?? 0;
+      }
+    }
+
+    // Garantir que a palavra do dia está correta
     final agora = DateTime.now();
     final diasNoAno = agora.difference(DateTime(agora.year, 1, 1)).inDays;
     final indiceODS = diasNoAno % todosODS.length;
@@ -126,14 +207,37 @@ class _TelaBrancaState extends State<TelaBranca> {
     });
   }
 
+  Future<void> _salvarEstado() async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    await prefs.setBool('jogoFinalizado', jogoFinalizado);
+    await prefs.setBool('vitoria', vitoria);
+    await prefs.setInt('tentativaAtual', tentativaAtual);
+    await prefs.setInt('posicaoSelecionada', posicaoSelecionada);
+    
+    // Salvar tentativas
+    final tentativasParaSalvar = tentativas.map((lista) => lista.join(',')).toList();
+    await prefs.setStringList('tentativas', tentativasParaSalvar);
+    
+    // Salvar estados
+    final estadosParaSalvar = estados.map((lista) => lista.join(',')).toList();
+    await prefs.setStringList('estados', estadosParaSalvar);
+    
+    // Salvar teclado
+    final tecladoKeys = estadoLetrasTeclado.keys.toList();
+    final tecladoValues = tecladoKeys.map((k) => estadoLetrasTeclado[k].toString()).toList();
+    await prefs.setStringList('tecladoKeys', tecladoKeys);
+    await prefs.setStringList('tecladoValues', tecladoValues);
+  }
+
   Future<void> _registrarTentativa(bool venceu) async {
     final hoje = DateTime.now().toString().split(' ')[0];
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('ultimaDataJogo', hoje);
     await prefs.setString('resultado$hoje', venceu ? 'venceu' : 'perdeu');
+    await _salvarEstado(); // Salvar estado após cada tentativa
   }
 
-   void _adicionarLetra(String letra) {
+  void _adicionarLetra(String letra) {
     if (jogoFinalizado) return;
     setState(() {
       if (letra == '⌫') {
@@ -151,6 +255,7 @@ class _TelaBrancaState extends State<TelaBranca> {
           posicaoSelecionada++;
         }
       }
+      _salvarEstado(); // Salvar estado após cada letra adicionada
     });
   }
 
@@ -194,10 +299,12 @@ class _TelaBrancaState extends State<TelaBranca> {
     for (int i = 0; i < 5; i++) {
       final letra = tentativas[tentativaAtual][i];
       if (letra.isNotEmpty) {
-        if (estadoAtual[i] == 2 || estadoAtual[i] == 1) {
+        if (estadoAtual[i] == 2) {
           estadoLetrasTeclado[letra] = 2;
-        } else if (estadoAtual[i] == -1) {
+        } else if (estadoAtual[i] == 1 && estadoLetrasTeclado[letra] != 2) {
           estadoLetrasTeclado[letra] = 1;
+        } else if (estadoAtual[i] == -1 && estadoLetrasTeclado[letra] == 0) {
+          estadoLetrasTeclado[letra] = -1;
         }
       }
     }
@@ -222,6 +329,8 @@ class _TelaBrancaState extends State<TelaBranca> {
         _mostrarResultado("Infelizmente você errou, não desista e tente novamente amanhã\nA palavra é: $palavraAtual");
       }
     });
+
+    await _salvarEstado(); // Salvar estado após verificação
   }
 
   void _mostrarResultado(String mensagem) {
@@ -234,7 +343,6 @@ class _TelaBrancaState extends State<TelaBranca> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.of(context).pop();
               Navigator.of(context).pop();
             },
             child: const Text("OK"),
@@ -261,11 +369,11 @@ class _TelaBrancaState extends State<TelaBranca> {
     final estado = estadoLetrasTeclado[letra];
     
     if (estado == 2) {
-      return const Color.fromARGB(255, 7, 255, 7).withOpacity(0.7); // Amarelo #EEFF07
+      return const Color.fromARGB(255, 7, 255, 7).withOpacity(0.7);
     } else if (estado == 1) {
-      return const Color.fromARGB(255, 176, 175, 175).withOpacity(0.1); // Cinza 50%
+      return const Color.fromARGB(255, 176, 175, 175).withOpacity(0.1);
     } else {
-      return const Color.fromARGB(255, 176, 175, 175); // Cinza normal
+      return const Color.fromARGB(255, 176, 175, 175);
     }
   }
 
