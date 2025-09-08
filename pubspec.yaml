@@ -1,4 +1,4 @@
-name: Letreco
+name: letreco
 description: "A new Flutter project."
 
 publish_to: "none" # Remove this line if you wish to publish to pub.dev
@@ -6,7 +6,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.8.1
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
@@ -23,17 +23,18 @@ dev_dependencies:
 
 flutter_native_splash:
   color: "#ffffff"
-  image: assets/LogoGamificacaoSplash2.png
+  image: assets/LogoGamificacaoSplashLamp.png
   android: true
   ios: true
-  android_gravity: fill_horizontal | fill_vertical
-  ios_content_mode: center
+  android_gravity: fill
+  ios_content_mode: scaleAspectFill
+
 
 
 flutter_icons:
   android: true
   ios: true
-  image_path: "assets/LogoGamificacaoIcon.png"
+  image_path: "assets/LogoGamificacaoSplashLamp.png"
 
 flutter:
   uses-material-design: true
@@ -43,7 +44,8 @@ flutter:
       fonts:
         - asset: fonte/Bungee/Bungee-Regular.ttf
 
-assets:
-  - assets/LogoGamificacaoIcon.png
-  - assets/LogoGamificacaoSplash2.png
-  - assets/palavras5.txt
+  assets:
+    - assets/LogoGamificacaoIcon.png
+    - assets/LogoGamificacaoSplash2.png
+    - assets/LogoGamificacaoSplashLamp.png
+    - assets/palavras5.txt

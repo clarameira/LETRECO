@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'services/word_validator.dart';
 
 class TelaBranca extends StatefulWidget {
   const TelaBranca({super.key});
@@ -95,6 +96,7 @@ class _TelaBrancaState extends State<TelaBranca> {
       'tema': 'Parcerias e Meios de Implementação',
       'palavras': ["UNIAO", "JUNTO", "GRUPO", "PACTO", "MEIOS"],
     },
+
   ];
 
   late Map<String, dynamic> odsAtual;
@@ -118,11 +120,9 @@ class _TelaBrancaState extends State<TelaBranca> {
     final hoje = DateTime.now();
     final dataHoje = DateTime(hoje.year, hoje.month, hoje.day).toString();
     
-    // Verificar se é um novo dia
     final ultimaData = prefs.getString('ultimaDataJogo');
     
     if (ultimaData != dataHoje) {
-      // NOVO DIA - iniciar jogo novo
       await _inicializarNovoJogo();
       await prefs.setString('ultimaDataJogo', dataHoje);
       await prefs.remove('jogoFinalizado');
@@ -134,7 +134,6 @@ class _TelaBrancaState extends State<TelaBranca> {
       await prefs.remove('tecladoKeys');
       await prefs.remove('tecladoValues');
     } else {
-      // MESMO DIA - carregar estado salvo
       await _carregarEstadoSalvo();
     }
   }
@@ -157,6 +156,9 @@ class _TelaBrancaState extends State<TelaBranca> {
       estados = List.generate(5, (_) => List.filled(5, 0));
       estadoLetrasTeclado = {};
     });
+
+    // print('Novo jogo - ODS: ${odsAtual['numero']} - ${odsAtual['tema']}');
+    // print('Palavra do dia: $palavraAtual');
   }
 
   Future<void> _carregarEstadoSalvo() async {
@@ -169,7 +171,6 @@ class _TelaBrancaState extends State<TelaBranca> {
       posicaoSelecionada = prefs.getInt('posicaoSelecionada') ?? 0;
     });
 
-    // Carregar tentativas
     final tentativasSalvas = prefs.getStringList('tentativas');
     if (tentativasSalvas != null) {
       for (int i = 0; i < tentativasSalvas.length; i++) {
@@ -177,7 +178,6 @@ class _TelaBrancaState extends State<TelaBranca> {
       }
     }
 
-    // Carregar estados
     final estadosSalvos = prefs.getStringList('estados');
     if (estadosSalvos != null) {
       for (int i = 0; i < estadosSalvos.length; i++) {
@@ -185,7 +185,6 @@ class _TelaBrancaState extends State<TelaBranca> {
       }
     }
 
-    // Carregar teclado
     final tecladoKeys = prefs.getStringList('tecladoKeys');
     final tecladoValues = prefs.getStringList('tecladoValues');
     if (tecladoKeys != null && tecladoValues != null) {
@@ -194,7 +193,6 @@ class _TelaBrancaState extends State<TelaBranca> {
       }
     }
 
-    // Garantir que a palavra do dia está correta
     final agora = DateTime.now();
     final diasNoAno = agora.difference(DateTime(agora.year, 1, 1)).inDays;
     final indiceODS = diasNoAno % todosODS.length;
@@ -205,6 +203,9 @@ class _TelaBrancaState extends State<TelaBranca> {
       odsAtual = todosODS[indiceODS];
       palavraAtual = palavrasODS[indicePalavra];
     });
+
+    // print('Jogo carregado - ODS: ${odsAtual['numero']} - ${odsAtual['tema']}');
+    // print('Palavra do dia: $palavraAtual');
   }
 
   Future<void> _salvarEstado() async {
@@ -215,15 +216,12 @@ class _TelaBrancaState extends State<TelaBranca> {
     await prefs.setInt('tentativaAtual', tentativaAtual);
     await prefs.setInt('posicaoSelecionada', posicaoSelecionada);
     
-    // Salvar tentativas
     final tentativasParaSalvar = tentativas.map((lista) => lista.join(',')).toList();
     await prefs.setStringList('tentativas', tentativasParaSalvar);
     
-    // Salvar estados
     final estadosParaSalvar = estados.map((lista) => lista.join(',')).toList();
     await prefs.setStringList('estados', estadosParaSalvar);
     
-    // Salvar teclado
     final tecladoKeys = estadoLetrasTeclado.keys.toList();
     final tecladoValues = tecladoKeys.map((k) => estadoLetrasTeclado[k].toString()).toList();
     await prefs.setStringList('tecladoKeys', tecladoKeys);
@@ -234,7 +232,7 @@ class _TelaBrancaState extends State<TelaBranca> {
     final hoje = DateTime.now().toString().split(' ')[0];
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('resultado$hoje', venceu ? 'venceu' : 'perdeu');
-    await _salvarEstado(); // Salvar estado após cada tentativa
+    await _salvarEstado();
   }
 
   void _adicionarLetra(String letra) {
@@ -255,7 +253,7 @@ class _TelaBrancaState extends State<TelaBranca> {
           posicaoSelecionada++;
         }
       }
-      _salvarEstado(); // Salvar estado após cada letra adicionada
+      _salvarEstado();
     });
   }
 
@@ -263,6 +261,13 @@ class _TelaBrancaState extends State<TelaBranca> {
     if (tentativas[tentativaAtual].contains('')) return;
 
     String palavraDigitada = tentativas[tentativaAtual].join();
+    
+    // VALIDAÇÃO DA PALAVRA - CONVERTE PARA MINÚSCULAS ANTES DE VERIFICAR
+    if (!WordValidator.isValidWord(palavraDigitada.toLowerCase())) {
+      _mostrarMensagemErro("Palavra não existe!");
+      return;
+    }
+
     bool acertou = palavraDigitada == palavraAtual;
 
     await _registrarTentativa(acertou);
@@ -301,10 +306,14 @@ class _TelaBrancaState extends State<TelaBranca> {
       if (letra.isNotEmpty) {
         if (estadoAtual[i] == 2) {
           estadoLetrasTeclado[letra] = 2;
-        } else if (estadoAtual[i] == 1 && estadoLetrasTeclado[letra] != 2) {
-          estadoLetrasTeclado[letra] = 1;
-        } else if (estadoAtual[i] == -1 && estadoLetrasTeclado[letra] == 0) {
-          estadoLetrasTeclado[letra] = -1;
+        } else if (estadoAtual[i] == 1) {
+          if (estadoLetrasTeclado[letra] != 2) {
+            estadoLetrasTeclado[letra] = 1;
+          }
+        } else if (estadoAtual[i] == -1) {
+          if (estadoLetrasTeclado[letra] != 2 && estadoLetrasTeclado[letra] != 1) {
+            estadoLetrasTeclado[letra] = -1;
+          }
         }
       }
     }
@@ -330,7 +339,7 @@ class _TelaBrancaState extends State<TelaBranca> {
       }
     });
 
-    await _salvarEstado(); // Salvar estado após verificação
+    await _salvarEstado();
   }
 
   void _mostrarResultado(String mensagem) {
@@ -352,6 +361,16 @@ class _TelaBrancaState extends State<TelaBranca> {
     );
   }
 
+  void _mostrarMensagemErro(String mensagem) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mensagem),
+        duration: const Duration(seconds: 2),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
   Color _getCorCaixa(int tentativa, int posicao) {
     switch (estados[tentativa][posicao]) {
       case 1:
@@ -361,7 +380,7 @@ class _TelaBrancaState extends State<TelaBranca> {
       case -1:
         return Colors.red;
       default:
-        return Colors.grey;
+        return Colors.grey[300]!;
     }
   }
 
@@ -369,9 +388,11 @@ class _TelaBrancaState extends State<TelaBranca> {
     final estado = estadoLetrasTeclado[letra];
     
     if (estado == 2) {
-      return const Color.fromARGB(255, 7, 255, 7).withOpacity(0.7);
+      return Colors.green;
     } else if (estado == 1) {
-      return const Color.fromARGB(255, 176, 175, 175).withOpacity(0.1);
+      return Colors.yellow;
+    } else if (estado == -1) {
+      return Colors.grey;
     } else {
       return const Color.fromARGB(255, 176, 175, 175);
     }
@@ -384,6 +405,10 @@ class _TelaBrancaState extends State<TelaBranca> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
       ),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 5),
@@ -443,9 +468,9 @@ class _TelaBrancaState extends State<TelaBranca> {
                       alignment: Alignment.center,
                       child: Text(
                         tentativas[tentativa][posicao],
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 28,
-                          color: Colors.white,
+                          color: estados[tentativa][posicao] == 0 ? const Color.fromARGB(255, 255, 255, 255) : Colors.white,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -506,10 +531,10 @@ class _TelaBrancaState extends State<TelaBranca> {
                           ),
                           child: Text(
                             letra,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                              color: _getCorTeclado(letra) == Colors.grey ? Colors.white : const Color.fromARGB(255, 255, 255, 255),
                             ),
                           ),
                         ),
@@ -535,10 +560,10 @@ class _TelaBrancaState extends State<TelaBranca> {
                           ),
                           child: Text(
                             letra,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                              color: _getCorTeclado(letra) == Colors.grey ? Colors.white : const Color.fromARGB(255, 255, 255, 255),
                             ),
                           ),
                         ),
@@ -565,10 +590,10 @@ class _TelaBrancaState extends State<TelaBranca> {
                             ),
                             child: Text(
                               letra,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                                color: _getCorTeclado(letra) == Colors.grey ? Colors.white : const Color.fromARGB(255, 255, 255, 255),
                               ),
                             ),
                           ),
