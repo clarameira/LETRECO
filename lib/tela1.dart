@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/word_validator.dart';
 
@@ -9,7 +10,7 @@ class TelaBranca extends StatefulWidget {
   State<TelaBranca> createState() => _TelaBrancaState();
 }
 
-class _TelaBrancaState extends State<TelaBranca> {
+class _TelaBrancaState extends State<TelaBranca> with WidgetsBindingObserver {
   final List<Map<String, dynamic>> todosODS = [
     {
       'numero': 1,
@@ -96,7 +97,6 @@ class _TelaBrancaState extends State<TelaBranca> {
       'tema': 'Parcerias e Meios de Implementação',
       'palavras': ["UNIAO", "JUNTO", "GRUPO", "PACTO", "MEIOS"],
     },
-
   ];
 
   late Map<String, dynamic> odsAtual;
@@ -108,11 +108,47 @@ class _TelaBrancaState extends State<TelaBranca> {
   int posicaoSelecionada = 0;
   bool jogoFinalizado = false;
   bool vitoria = false;
+  FocusNode _focusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _configurarTelaCheia();
     _carregarJogo();
+    _focusNode = FocusNode();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _focusNode.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _restaurarUI();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _configurarTelaCheia();
+    }
+  }
+
+  Future<void> _configurarTelaCheia() async {
+    await SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.immersiveSticky,
+      overlays: [],
+    );
+  }
+
+  Future<void> _restaurarUI() async {
+    await SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.edgeToEdge,
+      overlays: SystemUiOverlay.values,
+    );
   }
 
   Future<void> _carregarJogo() async {
@@ -156,9 +192,6 @@ class _TelaBrancaState extends State<TelaBranca> {
       estados = List.generate(5, (_) => List.filled(5, 0));
       estadoLetrasTeclado = {};
     });
-
-    // print('Novo jogo - ODS: ${odsAtual['numero']} - ${odsAtual['tema']}');
-    // print('Palavra do dia: $palavraAtual');
   }
 
   Future<void> _carregarEstadoSalvo() async {
@@ -203,14 +236,10 @@ class _TelaBrancaState extends State<TelaBranca> {
       odsAtual = todosODS[indiceODS];
       palavraAtual = palavrasODS[indicePalavra];
     });
-
-    // print('Jogo carregado - ODS: ${odsAtual['numero']} - ${odsAtual['tema']}');
-    // print('Palavra do dia: $palavraAtual');
   }
 
   Future<void> _salvarEstado() async {
     final prefs = await SharedPreferences.getInstance();
-    
     await prefs.setBool('jogoFinalizado', jogoFinalizado);
     await prefs.setBool('vitoria', vitoria);
     await prefs.setInt('tentativaAtual', tentativaAtual);
@@ -235,17 +264,36 @@ class _TelaBrancaState extends State<TelaBranca> {
     await _salvarEstado();
   }
 
+  void _selecionarPosicao(int tentativa, int posicao) {
+    if (!jogoFinalizado && tentativa == tentativaAtual) {
+      setState(() {
+        posicaoSelecionada = posicao;
+        
+        if (posicaoSelecionada < 4 && tentativas[tentativaAtual][posicaoSelecionada].isNotEmpty) {
+          for (int i = posicaoSelecionada + 1; i < 5; i++) {
+            if (tentativas[tentativaAtual][i].isEmpty) {
+              posicaoSelecionada = i;
+              break;
+            }
+          }
+        }
+      });
+    }
+  }
+
   void _adicionarLetra(String letra) {
     if (jogoFinalizado) return;
+    
     setState(() {
       if (letra == '⌫') {
-        if (posicaoSelecionada > 0 || tentativas[tentativaAtual][posicaoSelecionada].isNotEmpty) {
-          if (tentativas[tentativaAtual][posicaoSelecionada].isNotEmpty) {
-            tentativas[tentativaAtual][posicaoSelecionada] = '';
-          } else {
+        if (tentativas[tentativaAtual][posicaoSelecionada].isNotEmpty) {
+          tentativas[tentativaAtual][posicaoSelecionada] = '';
+          if (posicaoSelecionada > 0) {
             posicaoSelecionada--;
-            tentativas[tentativaAtual][posicaoSelecionada] = '';
           }
+        } else if (posicaoSelecionada > 0) {
+          posicaoSelecionada--;
+          tentativas[tentativaAtual][posicaoSelecionada] = '';
         }
       } else if (posicaoSelecionada < 5) {
         tentativas[tentativaAtual][posicaoSelecionada] = letra;
@@ -257,50 +305,86 @@ class _TelaBrancaState extends State<TelaBranca> {
     });
   }
 
+  void _handleKeyEvent(KeyEvent event) {
+    if (event is KeyDownEvent) {
+      final key = event.logicalKey;
+      
+      if (key == LogicalKeyboardKey.keyA) _adicionarLetra('A');
+      else if (key == LogicalKeyboardKey.keyB) _adicionarLetra('B');
+      else if (key == LogicalKeyboardKey.keyC) _adicionarLetra('C');
+      else if (key == LogicalKeyboardKey.keyD) _adicionarLetra('D');
+      else if (key == LogicalKeyboardKey.keyE) _adicionarLetra('E');
+      else if (key == LogicalKeyboardKey.keyF) _adicionarLetra('F');
+      else if (key == LogicalKeyboardKey.keyG) _adicionarLetra('G');
+      else if (key == LogicalKeyboardKey.keyH) _adicionarLetra('H');
+      else if (key == LogicalKeyboardKey.keyI) _adicionarLetra('I');
+      else if (key == LogicalKeyboardKey.keyJ) _adicionarLetra('J');
+      else if (key == LogicalKeyboardKey.keyK) _adicionarLetra('K');
+      else if (key == LogicalKeyboardKey.keyL) _adicionarLetra('L');
+      else if (key == LogicalKeyboardKey.keyM) _adicionarLetra('M');
+      else if (key == LogicalKeyboardKey.keyN) _adicionarLetra('N');
+      else if (key == LogicalKeyboardKey.keyO) _adicionarLetra('O');
+      else if (key == LogicalKeyboardKey.keyP) _adicionarLetra('P');
+      else if (key == LogicalKeyboardKey.keyQ) _adicionarLetra('Q');
+      else if (key == LogicalKeyboardKey.keyR) _adicionarLetra('R');
+      else if (key == LogicalKeyboardKey.keyS) _adicionarLetra('S');
+      else if (key == LogicalKeyboardKey.keyT) _adicionarLetra('T');
+      else if (key == LogicalKeyboardKey.keyU) _adicionarLetra('U');
+      else if (key == LogicalKeyboardKey.keyV) _adicionarLetra('V');
+      else if (key == LogicalKeyboardKey.keyW) _adicionarLetra('W');
+      else if (key == LogicalKeyboardKey.keyX) _adicionarLetra('X');
+      else if (key == LogicalKeyboardKey.keyY) _adicionarLetra('Y');
+      else if (key == LogicalKeyboardKey.keyZ) _adicionarLetra('Z');
+      else if (key == LogicalKeyboardKey.backspace || key == LogicalKeyboardKey.delete) {
+        _adicionarLetra('⌫');
+      }
+      else if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.numpadEnter) {
+        if (!jogoFinalizado && tentativas[tentativaAtual].join().length == 5) {
+          _verificarPalavra();
+        }
+      }
+    }
+  }
+
   void _verificarPalavra() async {
     if (tentativas[tentativaAtual].contains('')) return;
 
     String palavraDigitada = tentativas[tentativaAtual].join();
     
-    // VALIDAÇÃO DA PALAVRA - CONVERTE PARA MINÚSCULAS ANTES DE VERIFICAR
     if (!WordValidator.isValidWord(palavraDigitada.toLowerCase())) {
       _mostrarMensagemErro("Palavra não existe!");
       return;
     }
 
     bool acertou = palavraDigitada == palavraAtual;
-
     await _registrarTentativa(acertou);
 
+    List<bool> consumidas = List.filled(5, false);
     List<int> estadoAtual = List.filled(5, 0);
 
     for (int i = 0; i < 5; i++) {
       if (palavraDigitada[i] == palavraAtual[i]) {
         estadoAtual[i] = 2;
+        consumidas[i] = true;
       }
     }
 
     for (int i = 0; i < 5; i++) {
       if (estadoAtual[i] == 2) continue;
 
-      if (palavraAtual.contains(palavraDigitada[i])) {
-        int ocorrencias = palavraAtual.split(palavraDigitada[i]).length - 1;
-        int marcadas = 0;
-        for (int j = 0; j < 5; j++) {
-          if (palavraDigitada[j] == palavraDigitada[i] && estadoAtual[j] > 0) {
-            marcadas++;
-          }
-        }
-
-        if (marcadas < ocorrencias) {
+      for (int j = 0; j < 5; j++) {
+        if (!consumidas[j] && palavraDigitada[i] == palavraAtual[j]) {
           estadoAtual[i] = 1;
+          consumidas[j] = true;
+          break;
         }
-      } else {
+      }
+
+      if (estadoAtual[i] == 0) {
         estadoAtual[i] = -1;
       }
     }
 
-    // Atualizar estado das letras no teclado
     for (int i = 0; i < 5; i++) {
       final letra = tentativas[tentativaAtual][i];
       if (letra.isNotEmpty) {
@@ -392,240 +476,258 @@ class _TelaBrancaState extends State<TelaBranca> {
     } else if (estado == 1) {
       return Colors.yellow;
     } else if (estado == -1) {
-      return Colors.grey;
+      return Colors.red;
     } else {
       return const Color.fromARGB(255, 176, 175, 175);
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.of(context).pop(),
+  Widget _buildCaixa(double larguraDisponivel, int tentativa, int posicao, bool isTablet) {
+    double tamanhoCaixa = isTablet ? larguraDisponivel / 11 : larguraDisponivel / 9;
+
+    return GestureDetector(
+      onTap: () => _selecionarPosicao(tentativa, posicao),
+      child: Container(
+        margin: const EdgeInsets.all(4),
+        width: tamanhoCaixa,
+        height: tamanhoCaixa,
+        decoration: BoxDecoration(
+          color: _getCorCaixa(tentativa, posicao),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: tentativa == tentativaAtual &&
+                    posicao == posicaoSelecionada &&
+                    !jogoFinalizado
+                ? Colors.blue
+                : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: FittedBox(
+          fit: BoxFit.contain,
+          child: Text(
+            tentativas[tentativa][posicao],
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: estados[tentativa][posicao] == 0
+                  ? Colors.black
+                  : Colors.white,
+            ),
+          ),
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 5),
-        child: Column(
-          children: [
-            const SizedBox(height: 10),
-            const Text(
-              'LETRECO',
-              style: TextStyle(
-                fontSize: 36,
-                color: Colors.green,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Bungee',
-              ),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              'ODS ${odsAtual['numero']}',
-              style: const TextStyle(
-                fontSize: 28,
-                color: Colors.green,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              odsAtual['tema'],
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
+    );
+  }
 
-            Column(
-              children: List.generate(5, (tentativa) {
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(5, (posicao) {
-                    return Container(
-                      margin: const EdgeInsets.all(4),
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: _getCorCaixa(tentativa, posicao),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: tentativa == tentativaAtual && 
-                                 posicao == posicaoSelecionada && 
-                                 !jogoFinalizado
-                              ? Colors.blue
-                              : Colors.transparent,
-                          width: 2,
+  Widget _buildTecla(String letra, double larguraTela, bool isTablet) {
+    double larguraTecla = isTablet ? larguraTela / 13 : larguraTela / 12;
+    double alturaTecla = isTablet ? larguraTecla * 1.2 : larguraTecla * 1.3;
+    
+    return Container(
+      margin: const EdgeInsets.all(2),
+      width: larguraTecla,
+      height: alturaTecla,
+      child: ElevatedButton(
+        onPressed: () => _adicionarLetra(letra),
+        style: ElevatedButton.styleFrom(
+          padding: EdgeInsets.zero,
+          backgroundColor: _getCorTeclado(letra),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(6),
+          ),
+        ),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            letra,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              fontSize: isTablet ? 14 : null,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTeclaBackspace(double larguraTela, bool isTablet) {
+    double larguraTecla = isTablet ? larguraTela / 13 : larguraTela / 12;
+    double alturaTecla = isTablet ? larguraTecla * 1.2 : larguraTecla * 1.3;
+    
+    return Container(
+      margin: const EdgeInsets.all(2),
+      width: larguraTecla,
+      height: alturaTecla,
+      child: ElevatedButton(
+        onPressed: () => _adicionarLetra('⌫'),
+        style: ElevatedButton.styleFrom(
+          padding: EdgeInsets.zero,
+          backgroundColor: Colors.red,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(6),
+          ),
+        ),
+        child: Icon(
+          Icons.backspace,
+          color: Colors.white,
+          size: isTablet ? 18 : 20,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLinhaTeclado(String letras, double larguraTela, bool isTablet) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: letras.split('').map((letra) => _buildTecla(letra, larguraTela, isTablet)).toList(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final limitedMediaQuery = mediaQuery.copyWith(
+      textScaleFactor: mediaQuery.textScaleFactor.clamp(1.0, 1.3).toDouble(),
+    );
+
+    return MediaQuery(
+      data: limitedMediaQuery,
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.black),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+        body: SafeArea(
+          child: Center(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                double larguraTela = constraints.maxWidth;
+                double alturaTela = constraints.maxHeight;
+                bool isTablet = larguraTela > 600;
+                double larguraMaxima = isTablet ? 500 : larguraTela;
+
+                return KeyboardListener(
+                  focusNode: _focusNode,
+                  onKeyEvent: _handleKeyEvent,
+                  child: SizedBox(
+                    width: larguraMaxima,
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 10),
+                        const Text(
+                          'LETRECO',
+                          style: TextStyle(
+                            fontSize: 36,
+                            color: Colors.green,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Bungee',
+                          ),
                         ),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        tentativas[tentativa][posicao],
-                        style: TextStyle(
-                          fontSize: 28,
-                          color: estados[tentativa][posicao] == 0 ? const Color.fromARGB(255, 255, 255, 255) : Colors.white,
-                          fontWeight: FontWeight.bold,
+                        const SizedBox(height: 5),
+                        Text(
+                          'ODS ${odsAtual['numero']}',
+                          style: const TextStyle(
+                            fontSize: 28,
+                            color: Colors.green,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                    );
-                  }),
+                        const SizedBox(height: 5),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Text(
+                            odsAtual['tema'],
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        Container(
+                          margin: const EdgeInsets.symmetric(vertical: 10),
+                          child: Column(
+                            children: List.generate(5, (tentativa) {
+                              return Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: List.generate(
+                                  5,
+                                  (posicao) => _buildCaixa(larguraMaxima, tentativa, posicao, isTablet),
+                                ),
+                              );
+                            }),
+                          ),
+                        ),
+
+                        const Spacer(),
+
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 15),
+                          child: SizedBox(
+                            width: larguraMaxima * 0.4,
+                            height: 40,
+                            child: ElevatedButton(
+                              onPressed: !jogoFinalizado &&
+                                      tentativas[tentativaAtual].join().length == 5
+                                  ? _verificarPalavra
+                                  : null,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: const Text(
+                                'TENTAR',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        Container(
+                          padding: EdgeInsets.only(
+                            bottom: isTablet ? 10 : alturaTela * 0.02,
+                            left: isTablet ? 20 : 0,
+                            right: isTablet ? 20 : 0,
+                          ),
+                          child: Column(
+                            children: [
+                              _buildLinhaTeclado('QWERTYUIOP', larguraMaxima, isTablet),
+                              const SizedBox(height: 5),
+                              _buildLinhaTeclado('ASDFGHJKL', larguraMaxima, isTablet),
+                              const SizedBox(height: 5),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  ...'ZXCVBNM'.split('').map((letra) => _buildTecla(letra, larguraMaxima, isTablet)),
+                                  _buildTeclaBackspace(larguraMaxima, isTablet),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 );
-              }),
+              },
             ),
-
-            const Spacer(),
-
-            Padding(
-              padding: const EdgeInsets.only(bottom: 15),
-              child: SizedBox(
-                width: 143,
-                height: 33,
-                child: ElevatedButton(
-                  onPressed: !jogoFinalizado && tentativas[tentativaAtual].join().length == 5
-                      ? _verificarPalavra
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text(
-                    'TENTAR',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            Padding(
-              padding: const EdgeInsets.only(bottom: 100),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: 'QWERTYUIOP'.split('').map((letra) {
-                      return Container(
-                        margin: const EdgeInsets.all(2),
-                        width: 32,
-                        height: 41,
-                        child: ElevatedButton(
-                          onPressed: () => _adicionarLetra(letra),
-                          style: ElevatedButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            backgroundColor: _getCorTeclado(letra),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: Text(
-                            letra,
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: _getCorTeclado(letra) == Colors.grey ? Colors.white : const Color.fromARGB(255, 255, 255, 255),
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: 'ASDFGHJKL'.split('').map((letra) {
-                      return Container(
-                        margin: const EdgeInsets.all(2),
-                        width: 32,
-                        height: 41,
-                        child: ElevatedButton(
-                          onPressed: () => _adicionarLetra(letra),
-                          style: ElevatedButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            backgroundColor: _getCorTeclado(letra),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: Text(
-                            letra,
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: _getCorTeclado(letra) == Colors.grey ? Colors.white : const Color.fromARGB(255, 255, 255, 255),
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ...'ZXCVBNM'.split('').map((letra) {
-                        return Container(
-                          margin: const EdgeInsets.all(2),
-                          width: 32,
-                          height: 41,
-                          child: ElevatedButton(
-                            onPressed: () => _adicionarLetra(letra),
-                            style: ElevatedButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                              backgroundColor: _getCorTeclado(letra),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                            child: Text(
-                              letra,
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: _getCorTeclado(letra) == Colors.grey ? Colors.white : const Color.fromARGB(255, 255, 255, 255),
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                      
-                      Container(
-                        margin: const EdgeInsets.all(2),
-                        width: 34,
-                        height: 41,
-                        child: ElevatedButton(
-                          onPressed: () => _adicionarLetra('⌫'),
-                          style: ElevatedButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            backgroundColor: Colors.red,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: const Icon(
-                            Icons.backspace,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
