@@ -672,7 +672,7 @@ class _TelaBrancaState extends State<TelaBranca> with WidgetsBindingObserver {
                         const Spacer(),
 
                         Container(
-                          margin: const EdgeInsets.only(bottom: 15),
+                          margin: const EdgeInsets.only(bottom: 20),
                           child: SizedBox(
                             width: larguraMaxima * 0.4,
                             height: 40,
@@ -701,7 +701,7 @@ class _TelaBrancaState extends State<TelaBranca> with WidgetsBindingObserver {
 
                         Container(
                           padding: EdgeInsets.only(
-                            bottom: isTablet ? 10 : alturaTela * 0.02,
+                            bottom: isTablet ? 10 : alturaTela * 0.050,
                             left: isTablet ? 20 : 0,
                             right: isTablet ? 20 : 0,
                           ),
